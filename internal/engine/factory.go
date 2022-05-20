@@ -1,4 +1,4 @@
-package natsengine
+package engine
 
 import (
 	"context"

@@ -1,10 +1,10 @@
-package natsengine
+package engine
 
 import (
 	"strings"
 
-	"github.com/emm035/vault-plugin-secrets-nats/internal/account"
-	"github.com/emm035/vault-plugin-secrets-nats/internal/operator"
+	"github.com/emm035/nats-secrets-engine/internal/account"
+	"github.com/emm035/nats-secrets-engine/internal/operator"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )

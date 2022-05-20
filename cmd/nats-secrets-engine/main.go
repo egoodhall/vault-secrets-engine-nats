@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	natsengine "github.com/emm035/vault-plugin-secrets-nats"
+	"github.com/emm035/nats-secrets-engine/internal/engine"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/plugin"
@@ -18,7 +18,7 @@ func main() {
 	tlsprov := api.VaultPluginTLSProvider(tlsc)
 
 	err := plugin.Serve(&plugin.ServeOpts{
-		BackendFactoryFunc: natsengine.Factory,
+		BackendFactoryFunc: engine.Factory,
 		TLSProviderFunc:    tlsprov,
 	})
 	if err != nil {

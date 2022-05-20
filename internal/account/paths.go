@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/emm035/vault-plugin-secrets-nats/internal/nkutil"
+	"github.com/emm035/nats-secrets-engine/internal/nkutil"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"

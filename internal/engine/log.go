@@ -1,4 +1,4 @@
-package natsengine
+package engine
 
 import "github.com/hashicorp/go-hclog"
 

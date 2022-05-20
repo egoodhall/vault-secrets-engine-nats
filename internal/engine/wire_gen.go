@@ -4,12 +4,12 @@
 //go:build !wireinject
 // +build !wireinject
 
-package natsengine
+package engine
 
 import (
-	"github.com/emm035/vault-plugin-secrets-nats/internal"
-	"github.com/emm035/vault-plugin-secrets-nats/internal/account"
-	"github.com/emm035/vault-plugin-secrets-nats/internal/operator"
+	"github.com/emm035/nats-secrets-engine/internal/account"
+	"github.com/emm035/nats-secrets-engine/internal/operator"
+	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )
 
@@ -28,8 +28,20 @@ func NewBackend() (logical.Backend, error) {
 		Logger: logger,
 	}
 	accountPaths := account.NewPaths(accountService)
-	v := internal.NewPaths(paths, accountPaths)
-	v2 := internal.NewSecrets(userCredentialsSecret)
+	v := NewPaths(paths, accountPaths)
+	v2 := NewSecrets(userCredentialsSecret)
 	frameworkBackend := NewNatsEngine(service, renewalService, v, v2)
 	return frameworkBackend, nil
+}
+
+// wire.go:
+
+func NewPaths(operator2 operator.Paths, account2 account.Paths) []*framework.Path {
+	return framework.PathAppend(operator2, account2)
+}
+
+func NewSecrets(ucrds account.UserCredentialsSecret) []*framework.Secret {
+	return []*framework.Secret{
+		ucrds.Secret,
+	}
 }

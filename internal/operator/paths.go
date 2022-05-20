@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/emm035/vault-plugin-secrets-nats/internal/nkutil"
+	"github.com/emm035/nats-secrets-engine/internal/nkutil"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"

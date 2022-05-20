@@ -1,4 +1,4 @@
-module github.com/emm035/vault-plugin-secrets-nats
+module github.com/emm035/nats-secrets-engine
 
 go 1.18
 
