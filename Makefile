@@ -1,5 +1,5 @@
 
-plugin
+plugin:
 	go build -o bin/nats ./cmd/nats-secrets-engine
 
 clean:
