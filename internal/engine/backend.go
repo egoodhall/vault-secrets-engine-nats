@@ -19,7 +19,7 @@ type backend struct {
 	*framework.Backend
 }
 
-func NewNatsEngine(opsvc *operator.Service, arsvc *account.RenewalService, paths []*framework.Path, secrets []*framework.Secret) *framework.Backend {
+func NewNatsEngine(opsvc *operator.Service, arsvc *account.UserCredsService, paths []*framework.Path, secrets []*framework.Secret) *framework.Backend {
 	return &framework.Backend{
 		BackendType:    logical.TypeLogical,
 		Help:           strings.TrimSpace(backendHelp),

@@ -18,11 +18,11 @@ import (
 func NewBackend() (logical.Backend, error) {
 	service := &operator.Service{}
 	logger := NewLogger()
-	renewalService := &account.RenewalService{
+	userCredsService := &account.UserCredsService{
 		Logger: logger,
 	}
 	paths := operator.NewPaths(service)
-	userCredentialsSecret := account.NewUserCredentialsSecret(renewalService)
+	userCredentialsSecret := account.NewUserCredentialsSecret(userCredsService)
 	accountService := &account.Service{
 		Secret: userCredentialsSecret,
 		Logger: logger,
@@ -30,7 +30,7 @@ func NewBackend() (logical.Backend, error) {
 	accountPaths := account.NewPaths(accountService)
 	v := NewPaths(paths, accountPaths)
 	v2 := NewSecrets(userCredentialsSecret)
-	frameworkBackend := NewNatsEngine(service, renewalService, v, v2)
+	frameworkBackend := NewNatsEngine(service, userCredsService, v, v2)
 	return frameworkBackend, nil
 }
 

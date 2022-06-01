@@ -15,7 +15,7 @@ import (
 
 type Paths []*framework.Path
 
-func NewPaths(s *Service) Paths {
+func NewPaths(svc *Service) Paths {
 	return []*framework.Path{
 		{
 			Pattern: "account/" + framework.GenericNameRegex("name"),
@@ -23,19 +23,31 @@ func NewPaths(s *Service) Paths {
 				"name": {
 					Type:        framework.TypeString,
 					Description: "The account name",
-					Default:     "",
-					Required:    false,
+					Required:    true,
 				},
 				"nkey": {
 					Type:        framework.TypeString,
 					Description: "The NKey that will be used as the root of the trust chain",
 					Required:    false,
 				},
+				"default_ttl": {
+					Type:        framework.TypeDurationSecond,
+					Description: "The default TTL of user credentials for this account",
+					Default:     "15m",
+					Required:    false,
+				},
+				"max_ttl": {
+					Type:        framework.TypeDurationSecond,
+					Description: "The maximum TTL of user credentials for this account",
+					Default:     "1h",
+					Required:    false,
+				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.CreateOperation: &framework.PathOperation{Callback: s.Write},
-				logical.UpdateOperation: &framework.PathOperation{Callback: s.Write},
-				logical.ReadOperation:   &framework.PathOperation{Callback: s.Read},
+				logical.CreateOperation: &framework.PathOperation{Callback: svc.Write},
+				logical.UpdateOperation: &framework.PathOperation{Callback: svc.Write},
+				logical.ReadOperation:   &framework.PathOperation{Callback: svc.Read},
+				logical.DeleteOperation: &framework.PathOperation{Callback: svc.Delete},
 			},
 		},
 		{
@@ -49,7 +61,7 @@ func NewPaths(s *Service) Paths {
 				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ReadOperation: &framework.PathOperation{Callback: s.ReadJwt},
+				logical.ReadOperation: &framework.PathOperation{Callback: svc.ReadJwt},
 			},
 		},
 		{
@@ -73,9 +85,15 @@ func NewPaths(s *Service) Paths {
 					Default:     "",
 					Required:    false,
 				},
+				"ttl": {
+					Type:        framework.TypeDurationSecond,
+					Description: "The TTL of the generated user credentials",
+					Default:     "15m",
+					Required:    false,
+				},
 			},
 			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ReadOperation: &framework.PathOperation{Callback: s.LeaseUserCreds},
+				logical.ReadOperation: &framework.PathOperation{Callback: svc.LeaseUserCreds},
 			},
 		},
 	}
@@ -92,31 +110,39 @@ func (svc *Service) Write(ctx context.Context, req *logical.Request, fd *framewo
 		return nil, errors.New("account cannot be empty name")
 	}
 
-	actNkey, err := nkutil.GetOrDefault(fd, "nkey", nkeys.CreateAccount)
+	accountNkey, err := nkutil.GetOrDefault(fd, "nkey", nkeys.CreateAccount)
 	if err != nil {
 		return nil, err
 	}
 
-	act, err := getAccount(ctx, req.Storage, name)
+	account, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
-	} else if act == nil {
-		act = new(Account)
+	} else if account == nil {
+		account = new(Account)
 	}
 
-	if actSeed, err := actNkey.Seed(); err != nil {
+	if account.DefaultTtl == 0 {
+		account.DefaultTtl = fd.Get("default_ttl").(int)
+	}
+
+	if account.MaxTtl == 0 {
+		account.MaxTtl = fd.Get("max_ttl").(int)
+	}
+
+	if accountSeed, err := accountNkey.Seed(); err != nil {
 		return nil, err
 	} else {
-		act.Nkey = string(actSeed)
+		account.Nkey = string(accountSeed)
 	}
 
-	if e, err := logical.StorageEntryJSON(storagePath(name), act); err != nil {
+	if entry, err := logical.StorageEntryJSON(storagePath(name), account); err != nil {
 		return nil, err
-	} else if err := req.Storage.Put(ctx, e); err != nil {
+	} else if err := req.Storage.Put(ctx, entry); err != nil {
 		return nil, err
 	}
 
-	pubKey, err := actNkey.PublicKey()
+	pubKey, err := accountNkey.PublicKey()
 	if err != nil {
 		return nil, err
 	}
@@ -128,30 +154,45 @@ func (svc *Service) Write(ctx context.Context, req *logical.Request, fd *framewo
 	}, nil
 }
 
+func (svc *Service) Delete(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
+	name := fd.Get("name").(string)
+	if name == "" {
+		return nil, errors.New("account cannot be empty name")
+	}
+
+	if err := req.Storage.Delete(ctx, storagePath(name)); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
+}
+
 func (svc *Service) Read(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
 	name := fd.Get("name").(string)
 	if name == "" {
 		return nil, errors.New("account cannot be empty name")
 	}
 
-	act, err := getAccount(ctx, req.Storage, name)
+	account, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
 
-	actNkey, err := nkeys.FromSeed([]byte(act.Nkey))
+	accountNkey, err := nkeys.FromSeed([]byte(account.Nkey))
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := actNkey.PublicKey()
+	pubKey, err := accountNkey.PublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"public_key": pubKey,
+			"public_key":  pubKey,
+			"default_ttl": account.DefaultTtl,
+			"max_ttl":     account.MaxTtl,
 		},
 	}, nil
 }
@@ -162,17 +203,17 @@ func (svc *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *frame
 		return nil, errors.New("account cannot be empty name")
 	}
 
-	act, err := getAccount(ctx, req.Storage, name)
+	account, err := getAccount(ctx, req.Storage, name)
 	if err != nil {
 		return nil, err
 	}
 
-	actNkey, err := nkeys.FromSeed([]byte(act.Nkey))
+	accountNkey, err := nkeys.FromSeed([]byte(account.Nkey))
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := actNkey.PublicKey()
+	pubKey, err := accountNkey.PublicKey()
 	if err != nil {
 		return nil, err
 	}
@@ -180,9 +221,9 @@ func (svc *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *frame
 	claims := new(jwt.AccountClaims)
 	claims.Subject = pubKey
 	claims.Name = name
-	claims.Revocations = act.Revocations
+	claims.Revocations = account.Revocations
 
-	opJwt, err := claims.Encode(actNkey)
+	accountJwt, err := claims.Encode(accountNkey)
 	if err != nil {
 		return nil, err
 	}
@@ -190,143 +231,176 @@ func (svc *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *frame
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"public_key": pubKey,
-			"jwt":        opJwt,
+			"jwt":        accountJwt,
 		},
 	}, nil
 }
 
 func (svc *Service) LeaseUserCreds(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	actName := fd.Get("account_name").(string)
-	if actName == "" {
+	accountName := fd.Get("account_name").(string)
+	if accountName == "" {
 		return nil, errors.New("account name cannot be empty")
 	}
 
-	act, err := getAccount(ctx, req.Storage, actName)
+	account, err := getAccount(ctx, req.Storage, accountName)
 	if err != nil {
 		return nil, err
 	}
 
-	usrNkey, err := nkutil.GetOrDefault(fd, "nkey", nkeys.CreateUser)
+	userNkey, err := nkutil.GetOrDefault(fd, "nkey", nkeys.CreateUser)
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := usrNkey.PublicKey()
+	pubKey, err := userNkey.PublicKey()
 	if err != nil {
 		return nil, err
+	}
+
+	ttl := account.DefaultTtl
+	if t := fd.Get("ttl").(int); t != 0 && t < account.MaxTtl {
+		ttl = t
 	}
 
 	claims := new(jwt.UserClaims)
 	claims.Subject = pubKey
-	claims.Expires = time.Now().Add(15 * time.Minute).Unix()
+	claims.Expires = time.Now().Add(time.Duration(ttl) * time.Second).Unix()
 
 	if name := fd.Get("name").(string); name != "" {
 		claims.Name = name
 	}
 
-	actNkey, err := nkeys.FromSeed([]byte(act.Nkey))
+	accountNkey, err := nkeys.FromSeed([]byte(account.Nkey))
 	if err != nil {
 		return nil, err
 	}
 
-	usrJwt, err := claims.Encode(actNkey)
+	userJwt, err := claims.Encode(accountNkey)
 	if err != nil {
 		return nil, err
 	}
 
-	usrSeed, err := usrNkey.Seed()
+	userSeed, err := userNkey.Seed()
 	if err != nil {
 		return nil, err
 	}
 
-	actSeed, err := actNkey.Seed()
+	accountSeed, err := accountNkey.Seed()
 	if err != nil {
 		return nil, err
 	}
 
-	return svc.Secret.Response(
+	res := svc.Secret.Response(
 		map[string]interface{}{
-			"nkey": string(usrSeed),
-			"jwt":  usrJwt,
+			"account_name": accountName,
+			"nkey":         string(userSeed),
+			"jwt":          userJwt,
 		},
 		map[string]interface{}{
-			"account_name": actName,
-			"account_nkey": string(actSeed),
+			"account_name": accountName,
+			"account_nkey": string(accountSeed),
 			"user_name":    claims.Name,
-			"user_nkey":    string(usrSeed),
+			"user_nkey":    string(userSeed),
 		},
-	), nil
+	)
+
+	return res, nil
 }
 
-type RenewalService struct {
+type UserCredsService struct {
 	Logger hclog.Logger
 }
 
-func (rsvc *RenewalService) RenewUserCreds(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	actNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["account_nkey"].(string)))
+// Generates a new JWT with the
+func (ucSvc *UserCredsService) RenewUserCreds(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
+	account, err := getAccount(ctx, req.Storage, req.Secret.InternalData["account_name"].(string))
 	if err != nil {
 		return nil, err
 	}
 
-	usrNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["user_nkey"].(string)))
+	accountNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["account_nkey"].(string)))
 	if err != nil {
 		return nil, err
 	}
 
-	pubKey, err := usrNkey.PublicKey()
+	userNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["user_nkey"].(string)))
 	if err != nil {
 		return nil, err
 	}
+
+	pubKey, err := userNkey.PublicKey()
+	if err != nil {
+		return nil, err
+	}
+
+	ttl := req.Secret.Increment
+	if ttl == 0 {
+		ttl = time.Duration(account.DefaultTtl) * time.Second
+	} else if ttl > (time.Duration(account.MaxTtl) * time.Second) {
+		ttl = time.Duration(account.MaxTtl) * time.Second
+	}
+
+	ucSvc.Logger.Error("", "ttl", ttl, "default_ttl", time.Duration(account.DefaultTtl)*time.Second, "max_ttl", time.Duration(account.MaxTtl)*time.Second)
 
 	claims := new(jwt.UserClaims)
 	claims.Subject = pubKey
-	claims.Expires = time.Now().Add(15 * time.Minute).Unix()
+	claims.Expires = time.Now().Add(ttl).Unix()
 
 	if name := req.Secret.InternalData["user_name"].(string); name != "" {
 		claims.Name = name
 	}
 
-	usrJwt, err := claims.Encode(actNkey)
+	userJwt, err := claims.Encode(accountNkey)
 	if err != nil {
 		return nil, err
 	}
 
-	seed, err := usrNkey.Seed()
+	userSeed, err := userNkey.Seed()
 	if err != nil {
-		seed = make([]byte, 0)
+		userSeed = make([]byte, 0)
 	}
 
-	return &logical.Response{
+	res := &logical.Response{
 		Secret: req.Secret,
 		Data: map[string]interface{}{
-			"nkey": string(seed),
-			"jwt":  usrJwt,
+			"nkey": string(userSeed),
+			"jwt":  userJwt,
 		},
-	}, nil
+	}
+
+	res.Secret.TTL = ttl
+	res.Secret.LeaseOptions = logical.LeaseOptions{
+		TTL:       ttl,
+		Renewable: true,
+	}
+
+	return res, nil
 }
 
-func (rsvc *RenewalService) RevokeUserCreds(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
+// Revoke the specified user credentials. This will add the user's public key
+// to the account JWT's revocation map
+func (ucSvc *UserCredsService) RevokeUserCreds(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
 	accountName := req.Secret.InternalData["account_name"].(string)
-	act, err := getAccount(ctx, req.Storage, accountName)
+	account, err := getAccount(ctx, req.Storage, accountName)
 	if err != nil {
 		return nil, err
 	}
 
-	usrNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["user_nkey"].(string)))
+	userNkey, err := nkeys.FromSeed([]byte(req.Secret.InternalData["user_nkey"].(string)))
 	if err != nil {
 		return nil, err
 	}
-	pubKey, err := usrNkey.PublicKey()
+	pubKey, err := userNkey.PublicKey()
 	if err != nil {
 		return nil, err
 	}
 
-	if act.Revocations == nil {
-		act.Revocations = jwt.RevocationList{}
+	if account.Revocations == nil {
+		account.Revocations = jwt.RevocationList{}
 	}
-	act.Revocations.Revoke(pubKey, time.Now())
+	account.Revocations.Revoke(pubKey, time.Now())
 
-	if e, err := logical.StorageEntryJSON(storagePath(accountName), act); err != nil {
+	if e, err := logical.StorageEntryJSON(storagePath(accountName), account); err != nil {
 		return nil, err
 	} else if err := req.Storage.Put(ctx, e); err != nil {
 		return nil, err
@@ -337,27 +411,29 @@ func (rsvc *RenewalService) RevokeUserCreds(ctx context.Context, req *logical.Re
 
 // CompactRevocations will revoke all JWTs created for the account in the last hour period. If any
 // tokens were manually revoked already, they will be compacted to reduce the account JWT's size.
-func (rsvc *RenewalService) CompactRevocations(ctx context.Context, req *logical.Request) error {
-	actNames, err := req.Storage.List(ctx, "account/")
+func (ucSvc *UserCredsService) CompactRevocations(ctx context.Context, req *logical.Request) error {
+	accountNames, err := req.Storage.List(ctx, "account/")
 	if err != nil {
 		return err
 	}
 
-	for _, actName := range actNames {
-		act, err := getAccount(ctx, req.Storage, actName)
+	for _, accountName := range accountNames {
+		account, err := getAccount(ctx, req.Storage, accountName)
 		if err != nil {
 			return err
 		}
 
-		if act.Revocations == nil {
-			act.Revocations = jwt.RevocationList{}
+		if account.Revocations == nil {
+			account.Revocations = jwt.RevocationList{}
 		}
-		act.Revocations.Revoke(jwt.All, time.Now().Add(-15*time.Minute))
-		act.Revocations.MaybeCompact()
 
-		if e, err := logical.StorageEntryJSON(storagePath(actName), act); err != nil {
+		// Any JWTs > 1 hr old will have expired
+		account.Revocations.Revoke(jwt.All, time.Now().Add(-1*time.Hour))
+		account.Revocations.MaybeCompact()
+
+		if entry, err := logical.StorageEntryJSON(storagePath(accountName), account); err != nil {
 			return err
-		} else if err := req.Storage.Put(ctx, e); err != nil {
+		} else if err := req.Storage.Put(ctx, entry); err != nil {
 			return err
 		}
 	}

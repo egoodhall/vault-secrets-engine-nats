@@ -10,13 +10,13 @@ type UserCredentialsSecret struct {
 	*framework.Secret
 }
 
-func NewUserCredentialsSecret(rs *RenewalService) UserCredentialsSecret {
+func NewUserCredentialsSecret(ucs *UserCredsService) UserCredentialsSecret {
 	return UserCredentialsSecret{
 		&framework.Secret{
 			Type:            "nats_credentials",
 			DefaultDuration: 15 * time.Minute,
-			Renew:           rs.RenewUserCreds,
-			Revoke:          rs.RevokeUserCreds,
+			Renew:           ucs.RenewUserCreds,
+			Revoke:          ucs.RevokeUserCreds,
 			Fields: map[string]*framework.FieldSchema{
 				"nkey": {
 					Type:        framework.TypeString,

@@ -16,6 +16,8 @@ type Account struct {
 	Name        string             `json:"name"`
 	Nkey        string             `json:"nkey"`
 	Revocations jwt.RevocationList `json:"revocations,omitempty"`
+	DefaultTtl  int                `json:"default_ttl,omitempty"`
+	MaxTtl      int                `json:"max_ttl,omitempty"`
 }
 
 func getAccount(ctx context.Context, s logical.Storage, name string) (*Account, error) {
