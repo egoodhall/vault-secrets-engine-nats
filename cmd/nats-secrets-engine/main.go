@@ -12,12 +12,17 @@ import (
 func main() {
 	meta := new(api.PluginAPIClientMeta)
 	flags := meta.FlagSet()
-	flags.Parse(os.Args[1:])
+	err := flags.Parse(os.Args[1:])
+	if err != nil {
+		logger := hclog.New(&hclog.LoggerOptions{})
+		logger.Error("plugin shutting down", "error", err)
+		os.Exit(1)
+	}
 
 	tlsc := meta.GetTLSConfig()
 	tlsprov := api.VaultPluginTLSProvider(tlsc)
 
-	err := plugin.Serve(&plugin.ServeOpts{
+	err = plugin.Serve(&plugin.ServeOpts{
 		BackendFactoryFunc: engine.Factory,
 		TLSProviderFunc:    tlsprov,
 	})
