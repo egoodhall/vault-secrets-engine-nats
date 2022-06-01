@@ -1,5 +1,5 @@
 
-plugin: wire-gen
+plugin
 	go build -o bin/nats ./cmd/nats-secrets-engine
 
 clean:
@@ -11,7 +11,7 @@ test:
 
 # Dependency injection
 
-wire-gen: install-wire
+wire: install-wire
 	wire gen ./internal/engine
 
 install-wire:
