@@ -15,7 +15,7 @@ wire-gen: install-wire
 	wire gen ./internal/engine
 
 install-wire:
-	@command -v wire >> /dev/null || go install github.com/google/wire/cmd/wire@latest
+	command -v wire >> /dev/null || go install github.com/google/wire/cmd/wire@latest
 
 # Linting
 
