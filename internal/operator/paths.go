@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/emm035/nats-secrets-engine/internal/nkutil"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 	"github.com/nats-io/jwt/v2"
@@ -47,6 +48,7 @@ func NewPaths(os *Service) Paths {
 }
 
 type Service struct {
+	Log hclog.Logger
 }
 
 func (os *Service) InitOperator(ctx context.Context, req *logical.InitializationRequest) error {
@@ -82,20 +84,23 @@ func (os *Service) Write(ctx context.Context, req *logical.Request, fd *framewor
 		op = new(Operator)
 	}
 
-	opNkey, err := nkutil.GetOrDefault(fd, "nkey", nkeys.CreateOperator)
+	nk, err := nkutil.GetOrDefault(fd, "nkey", func() (nkeys.KeyPair, error) {
+		return nkeys.FromSeed([]byte(op.Nkey))
+	})
 	if err != nil {
 		return nil, err
-	}
-
-	// Get public key
-	pubKey, err := opNkey.PublicKey()
-	if err != nil {
-		return nil, err
+	} else if pk, err := nk.Seed(); err == nil {
+		op.Nkey = string(pk)
 	}
 
 	if e, err := logical.StorageEntryJSON(storagePath, op); err != nil {
 		return nil, err
 	} else if err := req.Storage.Put(ctx, e); err != nil {
+		return nil, err
+	}
+
+	pubKey, err := nk.PublicKey()
+	if err != nil {
 		return nil, err
 	}
 

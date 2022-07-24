@@ -9,7 +9,7 @@ import (
 )
 
 func storagePath(name string) string {
-	return "account/" + name
+	return "accounts/" + name
 }
 
 type Account struct {

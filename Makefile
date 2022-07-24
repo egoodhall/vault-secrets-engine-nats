@@ -1,6 +1,6 @@
 
 plugin:
-	go build -o bin/nats ./cmd/nats-secrets-engine
+	go build -ldflags="-s -w" -o bin/nats ./cmd/nats-secrets-engine
 
 clean:
 	rm -rf bin

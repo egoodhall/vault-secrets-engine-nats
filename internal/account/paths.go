@@ -18,7 +18,7 @@ type Paths []*framework.Path
 func NewPaths(svc *Service) Paths {
 	return []*framework.Path{
 		{
-			Pattern: "account/" + framework.GenericNameRegex("name"),
+			Pattern: "accounts/" + framework.GenericNameRegex("name"),
 			Fields: map[string]*framework.FieldSchema{
 				"name": {
 					Type:        framework.TypeString,
@@ -51,7 +51,7 @@ func NewPaths(svc *Service) Paths {
 			},
 		},
 		{
-			Pattern: "account/" + framework.GenericNameRegex("name") + "/jwt",
+			Pattern: "accounts/" + framework.GenericNameRegex("name") + "/jwt",
 			Fields: map[string]*framework.FieldSchema{
 				"name": {
 					Type:        framework.TypeString,
@@ -65,7 +65,7 @@ func NewPaths(svc *Service) Paths {
 			},
 		},
 		{
-			Pattern: "account/" + framework.GenericNameRegex("account_name") + "/user-creds",
+			Pattern: "accounts/" + framework.GenericNameRegex("account_name") + "/user-creds",
 			Fields: map[string]*framework.FieldSchema{
 				"account_name": {
 					Type:        framework.TypeString,
@@ -149,6 +149,7 @@ func (svc *Service) Write(ctx context.Context, req *logical.Request, fd *framewo
 
 	return &logical.Response{
 		Data: map[string]interface{}{
+			"name":       name,
 			"public_key": pubKey,
 		},
 	}, nil
@@ -190,6 +191,7 @@ func (svc *Service) Read(ctx context.Context, req *logical.Request, fd *framewor
 
 	return &logical.Response{
 		Data: map[string]interface{}{
+			"name":        name,
 			"public_key":  pubKey,
 			"default_ttl": account.DefaultTtl,
 			"max_ttl":     account.MaxTtl,
@@ -230,8 +232,9 @@ func (svc *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *frame
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"public_key": pubKey,
-			"jwt":        accountJwt,
+			"account_name": name,
+			"public_key":   pubKey,
+			"jwt":          accountJwt,
 		},
 	}, nil
 }
@@ -412,7 +415,7 @@ func (ucSvc *UserCredsService) RevokeUserCreds(ctx context.Context, req *logical
 // CompactRevocations will revoke all JWTs created for the account in the last hour period. If any
 // tokens were manually revoked already, they will be compacted to reduce the account JWT's size.
 func (ucSvc *UserCredsService) CompactRevocations(ctx context.Context, req *logical.Request) error {
-	accountNames, err := req.Storage.List(ctx, "account/")
+	accountNames, err := req.Storage.List(ctx, "accounts/")
 	if err != nil {
 		return err
 	}

@@ -10,7 +10,6 @@ import (
 const storagePath = "operator"
 
 type Operator struct {
-	Name string `json:"name"`
 	Nkey string `json:"nkey"`
 }
 
