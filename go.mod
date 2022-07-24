@@ -7,8 +7,7 @@ require (
 	github.com/hashicorp/go-hclog v1.2.0
 	github.com/hashicorp/vault/api v1.6.0
 	github.com/hashicorp/vault/sdk v0.5.0
-	github.com/nats-io/jwt v1.2.2
-	github.com/nats-io/jwt/v2 v2.2.1-0.20220330180145-442af02fd36a
+	github.com/nats-io/jwt/v2 v2.3.0
 	github.com/nats-io/nkeys v0.3.0
 )
 
