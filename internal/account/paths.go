@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/emm035/nats-secrets-engine/internal/nkutil"
+	"github.com/emm035/nats-secrets-engine/internal/operator"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
@@ -48,20 +49,6 @@ func NewPaths(svc *Service) Paths {
 				logical.UpdateOperation: &framework.PathOperation{Callback: svc.Write},
 				logical.ReadOperation:   &framework.PathOperation{Callback: svc.Read},
 				logical.DeleteOperation: &framework.PathOperation{Callback: svc.Delete},
-			},
-		},
-		{
-			Pattern: "accounts/" + framework.GenericNameRegex("name") + "/jwt",
-			Fields: map[string]*framework.FieldSchema{
-				"name": {
-					Type:        framework.TypeString,
-					Description: "The account name",
-					Default:     "",
-					Required:    false,
-				},
-			},
-			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ReadOperation: &framework.PathOperation{Callback: svc.ReadJwt},
 			},
 		},
 		{
@@ -147,10 +134,31 @@ func (svc *Service) Write(ctx context.Context, req *logical.Request, fd *framewo
 		return nil, err
 	}
 
+	claims := new(jwt.AccountClaims)
+	claims.Subject = pubKey
+	claims.Name = name
+	claims.Revocations = account.Revocations
+
+	operator, err := operator.GetOperator(ctx, req.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	operatorNkey, err := nkeys.FromSeed([]byte(operator.Nkey))
+	if err != nil {
+		return nil, err
+	}
+
+	accountJwt, err := claims.Encode(operatorNkey)
+	if err != nil {
+		return nil, err
+	}
+
 	return &logical.Response{
 		Data: map[string]interface{}{
 			"name":       name,
 			"public_key": pubKey,
+			"jwt":        accountJwt,
 		},
 	}, nil
 }
@@ -189,43 +197,22 @@ func (svc *Service) Read(ctx context.Context, req *logical.Request, fd *framewor
 		return nil, err
 	}
 
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"name":        name,
-			"public_key":  pubKey,
-			"default_ttl": account.DefaultTtl,
-			"max_ttl":     account.MaxTtl,
-		},
-	}, nil
-}
-
-func (svc *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	name := fd.Get("name").(string)
-	if name == "" {
-		return nil, errors.New("account cannot be empty name")
-	}
-
-	account, err := getAccount(ctx, req.Storage, name)
-	if err != nil {
-		return nil, err
-	}
-
-	accountNkey, err := nkeys.FromSeed([]byte(account.Nkey))
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := accountNkey.PublicKey()
-	if err != nil {
-		return nil, err
-	}
-
 	claims := new(jwt.AccountClaims)
 	claims.Subject = pubKey
 	claims.Name = name
 	claims.Revocations = account.Revocations
 
-	accountJwt, err := claims.Encode(accountNkey)
+	operator, err := operator.GetOperator(ctx, req.Storage)
+	if err != nil {
+		return nil, err
+	}
+
+	operatorNkey, err := nkeys.FromSeed([]byte(operator.Nkey))
+	if err != nil {
+		return nil, err
+	}
+
+	accountJwt, err := claims.Encode(operatorNkey)
 	if err != nil {
 		return nil, err
 	}

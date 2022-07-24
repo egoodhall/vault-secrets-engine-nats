@@ -13,7 +13,7 @@ type Operator struct {
 	Nkey string `json:"nkey"`
 }
 
-func getOperator(ctx context.Context, s logical.Storage) (*Operator, error) {
+func GetOperator(ctx context.Context, s logical.Storage) (*Operator, error) {
 	entry, err := s.Get(ctx, storagePath)
 	if err != nil {
 		return nil, err

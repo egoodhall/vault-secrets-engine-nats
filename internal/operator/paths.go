@@ -8,7 +8,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
-	"github.com/nats-io/jwt/v2"
+	"github.com/nats-io/jwt"
 	"github.com/nats-io/nkeys"
 )
 
@@ -31,19 +31,6 @@ func NewPaths(os *Service) Paths {
 				logical.ReadOperation:   &framework.PathOperation{Callback: os.Read},
 			},
 		},
-		{
-			Pattern: "operator/jwt",
-			Fields: map[string]*framework.FieldSchema{
-				"account_server_url": {
-					Type:        framework.TypeString,
-					Description: "The NKey that will be used as the root account",
-					Required:    false,
-				},
-			},
-			Operations: map[logical.Operation]framework.OperationHandler{
-				logical.ReadOperation: &framework.PathOperation{Callback: os.ReadJwt},
-			},
-		},
 	}
 }
 
@@ -52,7 +39,7 @@ type Service struct {
 }
 
 func (os *Service) InitOperator(ctx context.Context, req *logical.InitializationRequest) error {
-	op, err := getOperator(ctx, req.Storage)
+	op, err := GetOperator(ctx, req.Storage)
 	if err != nil {
 		return err
 	} else if op == nil {
@@ -77,7 +64,7 @@ func (os *Service) InitOperator(ctx context.Context, req *logical.Initialization
 }
 
 func (os *Service) Write(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	op, err := getOperator(ctx, req.Storage)
+	op, err := GetOperator(ctx, req.Storage)
 	if err != nil {
 		return nil, err
 	} else if op == nil {
@@ -99,70 +86,57 @@ func (os *Service) Write(ctx context.Context, req *logical.Request, fd *framewor
 		return nil, err
 	}
 
-	pubKey, err := nk.PublicKey()
+	pubkey, opJwt, err := genJwt(req.MountPoint, nk)
 	if err != nil {
 		return nil, err
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"public_key": pubKey,
+			"public_key": pubkey,
+			"jwt":        opJwt,
 		},
 	}, nil
 }
 
 func (cs *Service) Read(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	op, err := getOperator(ctx, req.Storage)
+	op, err := GetOperator(ctx, req.Storage)
 	if err != nil {
 		return nil, err
 	}
 
-	opNkey, err := nkeys.FromSeed([]byte(op.Nkey))
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := opNkey.PublicKey()
+	pubkey, opJwt, err := genFromSeed(req.MountPoint, op.Nkey)
 	if err != nil {
 		return nil, err
 	}
 
 	return &logical.Response{
 		Data: map[string]interface{}{
-			"public_key": pubKey,
+			"public_key": pubkey,
+			"jwt":        opJwt,
 		},
 	}, nil
 }
 
-func (cs *Service) ReadJwt(ctx context.Context, req *logical.Request, fd *framework.FieldData) (*logical.Response, error) {
-	op, err := getOperator(ctx, req.Storage)
+func genFromSeed(mount, seed string) (pubkey, opJwt string, err error) {
+	opNkey, err := nkeys.FromSeed([]byte(seed))
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
-	opNkey, err := nkeys.FromSeed([]byte(op.Nkey))
-	if err != nil {
-		return nil, err
-	}
+	return genJwt(mount, opNkey)
+}
 
-	pubKey, err := opNkey.PublicKey()
+func genJwt(mount string, nkey nkeys.KeyPair) (pubkey, opJwt string, err error) {
+	pubkey, err = nkey.PublicKey()
 	if err != nil {
-		return nil, err
+		return "", "", err
 	}
 
 	claims := new(jwt.OperatorClaims)
-	claims.Subject = pubKey
-	claims.Name = strings.TrimRight(req.MountPoint, "/")
+	claims.Subject = pubkey
+	claims.Name = strings.TrimRight(mount, "/")
 
-	opJwt, err := claims.Encode(opNkey)
-	if err != nil {
-		return nil, err
-	}
-
-	return &logical.Response{
-		Data: map[string]interface{}{
-			"public_key": pubKey,
-			"jwt":        opJwt,
-		},
-	}, nil
+	opJwt, err = claims.Encode(nkey)
+	return
 }
