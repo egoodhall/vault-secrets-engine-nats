@@ -65,5 +65,5 @@ $ vault read nats/accounts/SYS
 set +e
 
 # Open a shell with the vault token set
-PS1="vault-nats-example $ " bash
+PS1="\033[0;31mvault-nats-example\033[0m $ " bash
 
