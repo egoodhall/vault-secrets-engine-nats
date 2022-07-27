@@ -18,7 +18,8 @@ vault read nats/operator
 # mount's operator private key.
 vault write nats/accounts/SYS nkey=$(nk -gen account)
 
-# Get an account's JWT and public key. This is used for
+# Get an account's JWT and public key. This can be used
+# to back an account JWT service
 vault read nats/accounts/SYS
 
 # Generate user credentials for the specified account. The credentials

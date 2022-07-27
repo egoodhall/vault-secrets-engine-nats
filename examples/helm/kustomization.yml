@@ -1,0 +1,7 @@
+helmCharts:
+- name: vault
+  namespace: vault
+  releaseName: vault
+  valuesFile: values.yml
+  version: 0.20.0
+  repo: https://helm.releases.hashicorp.com
