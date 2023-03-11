@@ -38,14 +38,14 @@ sleep 1
 go build -v -ldflags="-s -w" -o "$bin/nats" "$root/cmd/nats-secrets-engine"
 
 # Set up environment
-export VAULT_TOKEN=$token
 export VAULT_ADDR=http://localhost:8200
+export VAULT_TOKEN=$token
 
 # Register and enable plugin
 vault plugin register -sha256="$(sha256sum "$bin/nats" | cut -d ' ' -f1)" secret nats
 vault secrets enable nats
 
-vault write -force nats/accounts/SYS 2>&1 > /dev/null
+vault write -force nats/accounts/system 2>&1 > /dev/null
 
 echo -e "\033[0;34m
 This shell is configured for the vault example server:
@@ -57,7 +57,8 @@ A NATS operator and service account have been configured,
 and can be accessed using the following commands:
 
 $ vault read nats/operator
-$ vault read nats/accounts/SYS
+$ vault read nats/accounts/system
+$ vault read nats/accounts/system/user-creds
 
 \033[0;33muse ctrl+D to close this shell and shut down vault
 \033[0m"
