@@ -3,7 +3,7 @@ package main
 import (
 	"os"
 
-	"github.com/emm035/vault-secrets-engine-nats/internal/engine"
+	"github.com/egoodhall/vault-secrets-engine-nats/internal/engine"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/api"
 	"github.com/hashicorp/vault/sdk/plugin"

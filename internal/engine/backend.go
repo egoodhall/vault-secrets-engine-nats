@@ -3,8 +3,8 @@ package engine
 import (
 	"strings"
 
-	"github.com/emm035/vault-secrets-engine-nats/internal/account"
-	"github.com/emm035/vault-secrets-engine-nats/internal/operator"
+	"github.com/egoodhall/vault-secrets-engine-nats/internal/account"
+	"github.com/egoodhall/vault-secrets-engine-nats/internal/operator"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
 )

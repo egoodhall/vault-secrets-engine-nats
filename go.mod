@@ -1,4 +1,4 @@
-module github.com/emm035/vault-secrets-engine-nats
+module github.com/egoodhall/vault-secrets-engine-nats
 
 go 1.19
 

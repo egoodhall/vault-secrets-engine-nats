@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/emm035/vault-secrets-engine-nats/internal/nkutil"
+	"github.com/egoodhall/vault-secrets-engine-nats/internal/nkutil"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/vault/sdk/framework"
 	"github.com/hashicorp/vault/sdk/logical"
